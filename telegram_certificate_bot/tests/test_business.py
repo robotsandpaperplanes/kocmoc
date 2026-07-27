@@ -2,6 +2,7 @@ from datetime import datetime, timezone
 from unittest.mock import patch
 
 from app.business import (
+    SAILING_OUTCOMES,
     generate_public_id,
     normalize_public_id,
     sailing_result,
@@ -26,12 +27,13 @@ def test_comment_truncation_uses_999_characters_and_ellipsis() -> None:
 
 
 def test_sailing_probability_branches_can_be_mocked() -> None:
-    with patch("app.business.random.randrange", return_value=0):
-        assert sailing_result() == "Вы плывете ✅"
-    with patch("app.business.random.randrange", return_value=98):
-        assert sailing_result() == "Вы плывете ✅"
-    with patch("app.business.random.randrange", return_value=99):
-        assert sailing_result() == "Вы летите 🤣"
+    for expected, _weight in SAILING_OUTCOMES:
+        with patch("app.business.random.choices", return_value=[expected]):
+            assert sailing_result() == expected
+
+
+def test_sailing_probabilities_add_up_to_one_hundred_percent() -> None:
+    assert sum(weight for _message, weight in SAILING_OUTCOMES) == 100
 
 
 def test_utc_time_text_is_24_hour_utc() -> None:
