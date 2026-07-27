@@ -12,10 +12,13 @@ BTN_TIME = "🕰️ Который час?"
 BTN_SAIL = "⚓️ Плыть"
 BTN_CERTIFICATE = "🎁 Сертификат"
 BTN_MY_CERTIFICATES = "📦 Мои сертификаты"
+BTN_BUY_USERNAME = "👽 Купить юз @kocmoc"
 BTN_BUY_CERTIFICATE = "🎁 Купить сертификат"
 BTN_BACK = "⬅️ Назад"
 BTN_HOME = "⬅️ В начало"
 BTN_SKIP_COMMENT = "🙊 Без комментариев"
+BTN_YES = "Да"
+BTN_NO = "Нет"
 
 BTN_FIND_CERTIFICATE = "🔎 Найти сертификат"
 BTN_ACTIVE_CERTIFICATES = "📦 Активные сертификаты"
@@ -47,6 +50,7 @@ MAIN_MENU_KEYBOARD = _keyboard(
     [
         [BTN_TIME, BTN_SAIL],
         [BTN_CERTIFICATE, BTN_MY_CERTIFICATES],
+        [BTN_BUY_USERNAME],
     ],
     "Выберите раздел",
 )
@@ -76,6 +80,10 @@ def payment_keyboard(amount: int) -> ReplyKeyboardMarkup:
 
 
 HOME_KEYBOARD = _keyboard([[BTN_HOME]])
+
+USERNAME_PURCHASE_KEYBOARD = _keyboard(
+    [[BTN_YES, BTN_NO], [BTN_HOME]],
+)
 
 MY_CERTIFICATES_KEYBOARD = _keyboard(
     [[BTN_BUY_CERTIFICATE], [BTN_HOME]],

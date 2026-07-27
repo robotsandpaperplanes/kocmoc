@@ -7,6 +7,10 @@ class CertificateFlow(StatesGroup):
     waiting_for_payment = State()
 
 
+class UsernamePurchaseFlow(StatesGroup):
+    choosing_answer = State()
+
+
 class AdminFlow(StatesGroup):
     waiting_for_certificate_id = State()
     viewing_certificate = State()

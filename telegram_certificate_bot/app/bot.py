@@ -30,27 +30,31 @@ from .keyboards import (
     BTN_ACTIVE_CERTIFICATES,
     BTN_BACK,
     BTN_BUY_CERTIFICATE,
+    BTN_BUY_USERNAME,
     BTN_CANCEL,
     BTN_CERTIFICATE,
     BTN_CONFIRM_REDEEM,
     BTN_FIND_CERTIFICATE,
     BTN_HOME,
     BTN_MY_CERTIFICATES,
+    BTN_NO,
     BTN_REDEEM,
     BTN_REDEEMED_CERTIFICATES,
     BTN_SAIL,
     BTN_SKIP_COMMENT,
     BTN_TIME,
+    BTN_YES,
     CERTIFICATE_CARD_KEYBOARD,
     COMMENT_KEYBOARD,
     HOME_KEYBOARD,
     MAIN_MENU_KEYBOARD,
     MY_CERTIFICATES_KEYBOARD,
+    USERNAME_PURCHASE_KEYBOARD,
     certificate_list_inline,
     payment_keyboard,
 )
 from .models import Certificate, CertificateStatus
-from .states import AdminFlow, CertificateFlow
+from .states import AdminFlow, CertificateFlow, UsernamePurchaseFlow
 
 
 logger = logging.getLogger(__name__)
@@ -355,6 +359,40 @@ async def current_time(message: Message, state: FSMContext) -> None:
 async def sail(message: Message, state: FSMContext) -> None:
     await state.clear()
     await message.answer(sailing_result(), reply_markup=BACK_KEYBOARD)
+
+
+@router.message(F.text == BTN_BUY_USERNAME)
+async def username_purchase_start(
+    message: Message,
+    state: FSMContext,
+) -> None:
+    await state.clear()
+    await state.set_state(UsernamePurchaseFlow.choosing_answer)
+    await message.answer(
+        "Хотите приобрести юзернейм @kocmoc через платформу Fragments?",
+        reply_markup=USERNAME_PURCHASE_KEYBOARD,
+    )
+
+
+@router.message(UsernamePurchaseFlow.choosing_answer, F.text == BTN_YES)
+async def username_purchase_yes(
+    message: Message,
+    state: FSMContext,
+) -> None:
+    await state.clear()
+    await message.answer(
+        "Пошёл на хуй",
+        reply_markup=HOME_KEYBOARD,
+    )
+
+
+@router.message(UsernamePurchaseFlow.choosing_answer, F.text == BTN_NO)
+async def username_purchase_no(
+    message: Message,
+    state: FSMContext,
+) -> None:
+    await state.clear()
+    await message.answer("🤝", reply_markup=HOME_KEYBOARD)
 
 
 @router.message(F.text.in_({BTN_CERTIFICATE, BTN_BUY_CERTIFICATE}))
@@ -713,6 +751,14 @@ async def invalid_payment_step(
     await message.answer(
         f"Нажмите «Оплатить {amount} 🍅» или вернитесь назад.",
         reply_markup=payment_keyboard(amount),
+    )
+
+
+@router.message(UsernamePurchaseFlow.choosing_answer)
+async def invalid_username_purchase_answer(message: Message) -> None:
+    await message.answer(
+        "Выберите «Да» или «Нет».",
+        reply_markup=USERNAME_PURCHASE_KEYBOARD,
     )
 
 
