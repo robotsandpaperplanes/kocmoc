@@ -26,6 +26,7 @@ BTN_REDEEMED_CERTIFICATES = "✅ Погашенные сертификаты"
 BTN_REDEEM = "✅ Погасить сертификат"
 BTN_CONFIRM_REDEEM = "✅ Да, погасить"
 BTN_CANCEL = "❌ Отмена"
+INLINE_SAIL_QUERY = "плыть"
 
 AMOUNT_LABELS = {
     "5 🍅": 5,
@@ -128,5 +129,19 @@ def certificate_list_inline(
                 )
             ]
             for public_id, amount in certificates
+        ]
+    )
+
+
+def sailing_inline_keyboard() -> InlineKeyboardMarkup:
+    """Let another chat member launch their own inline sailing result."""
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text=BTN_SAIL,
+                    switch_inline_query_current_chat=INLINE_SAIL_QUERY,
+                )
+            ]
         ]
     )
