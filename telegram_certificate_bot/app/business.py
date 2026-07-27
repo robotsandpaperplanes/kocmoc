@@ -8,6 +8,12 @@ from datetime import datetime, timezone
 
 PUBLIC_ID_PATTERN = re.compile(r"^\d{4}-\d{4}$")
 MAX_DISPLAYED_COMMENT_LENGTH = 1000
+SAILING_OUTCOMES = (
+    ("Вы плывете ✅", 96.0),
+    ("Вы летите 🫵 🤣", 1.0),
+    ("Вы испугались воды 😰", 2.5),
+    ("На вас упал огнетушитель 🧯", 0.5),
+)
 
 
 def generate_public_id() -> str:
@@ -28,8 +34,9 @@ def truncate_comment(comment: str) -> str:
 
 
 def sailing_result() -> str:
-    """Return the rare flying result for exactly one draw out of one hundred."""
-    return "Вы плывете ✅" if random.randrange(100) < 99 else "Вы летите 🤣"
+    """Return one sailing outcome according to its configured percentage."""
+    messages, weights = zip(*SAILING_OUTCOMES)
+    return random.choices(messages, weights=weights, k=1)[0]
 
 
 def utc_time_text(now: datetime | None = None) -> str:
