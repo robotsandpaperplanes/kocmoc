@@ -8,7 +8,13 @@ from aiogram import Dispatcher, F, Router
 from aiogram.enums import ParseMode
 from aiogram.filters import Command, CommandObject, CommandStart
 from aiogram.fsm.context import FSMContext
-from aiogram.types import CallbackQuery, Message
+from aiogram.types import (
+    CallbackQuery,
+    InlineQuery,
+    InlineQueryResultArticle,
+    InputTextMessageContent,
+    Message,
+)
 
 from .business import (
     normalize_public_id,
@@ -47,11 +53,13 @@ from .keyboards import (
     CERTIFICATE_CARD_KEYBOARD,
     COMMENT_KEYBOARD,
     HOME_KEYBOARD,
+    INLINE_SAIL_QUERY,
     MAIN_MENU_KEYBOARD,
     MY_CERTIFICATES_KEYBOARD,
     USERNAME_PURCHASE_KEYBOARD,
     certificate_list_inline,
     payment_keyboard,
+    sailing_inline_keyboard,
 )
 from .models import Certificate, CertificateStatus
 from .states import AdminFlow, CertificateFlow, UsernamePurchaseFlow
@@ -168,6 +176,18 @@ def issued_certificate_text(certificate: Certificate) -> str:
     return "\n".join(lines)
 
 
+def build_sailing_inline_result() -> InlineQueryResultArticle:
+    return InlineQueryResultArticle(
+        id="sailing",
+        title=BTN_SAIL,
+        description="Узнать, плывете вы или летите",
+        input_message_content=InputTextMessageContent(
+            message_text=sailing_result(),
+        ),
+        reply_markup=sailing_inline_keyboard(),
+    )
+
+
 async def show_main_menu(message: Message, state: FSMContext) -> None:
     await state.clear()
     await message.answer(WELCOME_TEXT, reply_markup=MAIN_MENU_KEYBOARD)
@@ -277,6 +297,26 @@ def is_admin(message: Message, settings: Settings) -> bool:
     return bool(
         message.from_user
         and settings.is_admin(message.from_user.id)
+    )
+
+
+@router.inline_query()
+async def inline_sail(query: InlineQuery) -> None:
+    normalized_query = query.query.strip().casefold()
+    allowed_queries = {
+        "",
+        INLINE_SAIL_QUERY,
+        BTN_SAIL.casefold(),
+    }
+    results = (
+        [build_sailing_inline_result()]
+        if normalized_query in allowed_queries
+        else []
+    )
+    await query.answer(
+        results=results,
+        cache_time=0,
+        is_personal=True,
     )
 
 
