@@ -2,13 +2,21 @@ from datetime import datetime, timezone
 from unittest.mock import patch
 
 from app.business import (
+    CERTIFICATE_AMOUNTS,
     SAILING_OUTCOMES,
+    format_amount,
     generate_public_id,
     normalize_public_id,
     sailing_result,
     truncate_comment,
     utc_time_text,
 )
+
+
+def test_certificate_amounts_are_formatted_as_rubles() -> None:
+    assert CERTIFICATE_AMOUNTS == (5_000, 10_000, 30_000, 50_000)
+    assert format_amount(5_000) == "5\u202f000 ₽"
+    assert format_amount(50_000) == "50\u202f000 ₽"
 
 
 def test_generate_public_id_uses_four_digit_groups() -> None:
