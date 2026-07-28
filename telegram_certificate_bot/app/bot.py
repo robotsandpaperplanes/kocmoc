@@ -180,7 +180,7 @@ def build_sailing_inline_result() -> InlineQueryResultArticle:
     return InlineQueryResultArticle(
         id="sailing",
         title=BTN_SAIL,
-        description="Узнать, плывете вы или летите",
+        description="Узнать, плывёте ли вы",
         input_message_content=InputTextMessageContent(
             message_text=sailing_result(),
         ),

@@ -9,7 +9,7 @@ from datetime import datetime, timezone
 PUBLIC_ID_PATTERN = re.compile(r"^\d{4}-\d{4}$")
 MAX_DISPLAYED_COMMENT_LENGTH = 1000
 SAILING_OUTCOMES = (
-    ("Вы плывете ✅", 96.0),
+    ("Вы плывёте ✅", 96.0),
     ("Вы летите 🫵 🤣", 1.0),
     ("Вы испугались воды 😰", 2.5),
     ("На вас упал огнетушитель 🧯", 0.5),
