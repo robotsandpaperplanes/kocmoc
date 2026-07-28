@@ -1,0 +1,1 @@
+-r telegram_certificate_bot/requirements.txt
