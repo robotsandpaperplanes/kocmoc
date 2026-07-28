@@ -9,7 +9,7 @@ def test_inline_sail_returns_uncached_personal_result_with_relaunch_button() -> 
     query = AsyncMock()
     query.query = ""
 
-    with patch("app.bot.sailing_result", return_value="Вы ёте ✅"):
+    with patch("app.bot.sailing_result", return_value="Вы плывёте ✅"):
         asyncio.run(inline_sail(query))
 
     query.answer.assert_awaited_once()
