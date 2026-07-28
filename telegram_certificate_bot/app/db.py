@@ -8,7 +8,7 @@ from uuid import uuid4
 
 import aiosqlite
 
-from .business import generate_public_id
+from .business import CERTIFICATE_AMOUNTS, generate_public_id
 from .models import Certificate, CertificateStatus, OrderStatus
 
 
@@ -105,10 +105,45 @@ class Database:
             UPDATE certificates
             SET amount = CASE
                 WHEN amount IS NOT NULL THEN amount
-                WHEN amount_kopecks >= 100000 THEN CAST(amount_kopecks / 100000 AS INTEGER)
-                ELSE amount_kopecks
+                ELSE CAST(amount_kopecks / 100 AS INTEGER)
             END
             WHERE amount IS NULL
+            """
+        )
+        # Early test builds stored the four old tomato denominations directly
+        # in both amount columns. Preserve those certificates by mapping each
+        # old button position to its new ruble denomination.
+        await db.execute(
+            """
+            UPDATE certificates
+            SET
+                amount = CASE amount
+                    WHEN 5 THEN 5000
+                    WHEN 10 THEN 10000
+                    WHEN 15 THEN 30000
+                    WHEN 20 THEN 50000
+                END,
+                amount_kopecks = CASE amount
+                    WHEN 5 THEN 500000
+                    WHEN 10 THEN 1000000
+                    WHEN 15 THEN 3000000
+                    WHEN 20 THEN 5000000
+                END
+            WHERE amount IN (5, 10, 15, 20)
+              AND amount_kopecks IN (5, 10, 15, 20)
+            """
+        )
+        await db.execute(
+            """
+            UPDATE orders
+            SET amount_kopecks = CASE amount_kopecks
+                WHEN 5 THEN 500000
+                WHEN 10 THEN 1000000
+                WHEN 15 THEN 3000000
+                WHEN 20 THEN 5000000
+            END
+            WHERE amount_kopecks IN (5, 10, 15, 20)
+              AND invoice_payload LIKE 'test:%'
             """
         )
         await db.execute(
@@ -181,7 +216,7 @@ class Database:
         public_id_generator: Callable[[], str] = generate_public_id,
     ) -> Certificate:
         """Create a paid test order and certificate in one transaction."""
-        if amount not in {5, 10, 15, 20}:
+        if amount not in CERTIFICATE_AMOUNTS:
             raise ValueError("Недопустимый номинал сертификата")
 
         order_id = str(uuid4())
@@ -205,7 +240,7 @@ class Database:
                     order_id,
                     telegram_user_id,
                     chat_id,
-                    amount,
+                    amount * 100,
                     comment,
                     OrderStatus.PAID.value,
                     payload,
@@ -227,7 +262,7 @@ class Database:
                     order_id,
                     public_id,
                     redeem_token,
-                    amount,
+                    amount * 100,
                     comment,
                     CertificateStatus.ACTIVE.value,
                     created_at,
