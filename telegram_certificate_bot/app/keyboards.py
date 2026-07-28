@@ -1,0 +1,147 @@
+from __future__ import annotations
+
+from aiogram.types import (
+    InlineKeyboardButton,
+    InlineKeyboardMarkup,
+    KeyboardButton,
+    ReplyKeyboardMarkup,
+)
+
+from .business import CERTIFICATE_AMOUNTS, format_amount
+
+
+BTN_TIME = "🕰️ Который час?"
+BTN_SAIL = "⚓️ Плыть"
+BTN_CERTIFICATE = "🎁 Сертификат"
+BTN_MY_CERTIFICATES = "📦 Мои сертификаты"
+BTN_BUY_USERNAME = "👽 Купить юз @kocmoc"
+BTN_BUY_CERTIFICATE = "🎁 Купить сертификат"
+BTN_BACK = "⬅️ Назад"
+BTN_HOME = "⬅️ В начало"
+BTN_SKIP_COMMENT = "🙊 Без комментариев"
+BTN_YES = "Да"
+BTN_NO = "Нет"
+
+BTN_FIND_CERTIFICATE = "🔎 Найти сертификат"
+BTN_ACTIVE_CERTIFICATES = "📦 Активные сертификаты"
+BTN_REDEEMED_CERTIFICATES = "✅ Погашенные сертификаты"
+BTN_REDEEM = "✅ Погасить сертификат"
+BTN_CONFIRM_REDEEM = "✅ Да, погасить"
+BTN_CANCEL = "❌ Отмена"
+INLINE_SAIL_QUERY = "плыть"
+
+AMOUNT_LABELS = {
+    format_amount(amount): amount
+    for amount in CERTIFICATE_AMOUNTS
+}
+
+
+def _keyboard(
+    rows: list[list[str]],
+    placeholder: str | None = None,
+) -> ReplyKeyboardMarkup:
+    return ReplyKeyboardMarkup(
+        keyboard=[[KeyboardButton(text=text) for text in row] for row in rows],
+        resize_keyboard=True,
+        input_field_placeholder=placeholder,
+    )
+
+
+MAIN_MENU_KEYBOARD = _keyboard(
+    [
+        [BTN_TIME, BTN_SAIL],
+        [BTN_CERTIFICATE, BTN_MY_CERTIFICATES],
+        [BTN_BUY_USERNAME],
+    ],
+    "Выберите раздел",
+)
+
+BACK_KEYBOARD = _keyboard([[BTN_BACK]])
+
+AMOUNT_KEYBOARD = _keyboard(
+    [
+        [format_amount(5_000), format_amount(10_000)],
+        [format_amount(30_000), format_amount(50_000)],
+        [BTN_BACK],
+    ],
+    "Выберите номинал",
+)
+
+COMMENT_KEYBOARD = _keyboard(
+    [[BTN_SKIP_COMMENT], [BTN_BACK]],
+    "Введите комментарий",
+)
+
+
+def payment_keyboard(amount: int) -> ReplyKeyboardMarkup:
+    return _keyboard(
+        [[f"Оплатить {format_amount(amount)}"], [BTN_BACK]],
+        "Подтвердите тестовую оплату",
+    )
+
+
+HOME_KEYBOARD = _keyboard([[BTN_HOME]])
+
+USERNAME_PURCHASE_KEYBOARD = _keyboard(
+    [[BTN_YES, BTN_NO], [BTN_HOME]],
+)
+
+MY_CERTIFICATES_KEYBOARD = _keyboard(
+    [[BTN_BUY_CERTIFICATE], [BTN_HOME]],
+)
+
+CERTIFICATE_CARD_KEYBOARD = _keyboard(
+    [[BTN_MY_CERTIFICATES], [BTN_HOME]],
+)
+
+ADMIN_MENU_KEYBOARD = _keyboard(
+    [
+        [BTN_FIND_CERTIFICATE],
+        [BTN_ACTIVE_CERTIFICATES],
+        [BTN_REDEEMED_CERTIFICATES],
+        [BTN_HOME],
+    ],
+    "Выберите действие",
+)
+
+ADMIN_SEARCH_KEYBOARD = _keyboard([[BTN_BACK]], "Введите xxxx-xxxx")
+
+ADMIN_CERTIFICATE_ACTIVE_KEYBOARD = _keyboard(
+    [[BTN_REDEEM], [BTN_BACK]],
+)
+
+ADMIN_CERTIFICATE_REDEEMED_KEYBOARD = _keyboard([[BTN_BACK]])
+
+ADMIN_REDEEM_CONFIRM_KEYBOARD = _keyboard(
+    [[BTN_CONFIRM_REDEEM], [BTN_CANCEL]],
+)
+
+
+def certificate_list_inline(
+    certificates: list[tuple[str, int]],
+) -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text=f"{public_id} — {format_amount(amount)}",
+                    callback_data=f"certificate:{public_id}",
+                )
+            ]
+            for public_id, amount in certificates
+        ]
+    )
+
+
+def sailing_inline_keyboard() -> InlineKeyboardMarkup:
+    """Let another chat member launch their own inline sailing result."""
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text=BTN_SAIL,
+                    switch_inline_query_current_chat=INLINE_SAIL_QUERY,
+                )
+            ]
+        ]
+    )
