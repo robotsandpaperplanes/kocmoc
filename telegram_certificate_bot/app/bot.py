@@ -17,6 +17,7 @@ from aiogram.types import (
 )
 
 from .business import (
+    format_amount,
     normalize_public_id,
     sailing_result,
     truncate_comment,
@@ -111,7 +112,7 @@ def certificate_card_text(
     lines = [
         f"Сертификат <code>{certificate.public_id}</code>",
         "",
-        f"Номинал: <b>{certificate.amount} 🍅</b>",
+        f"Номинал: <b>{format_amount(certificate.amount)}</b>",
         f"Статус: <b>{STATUS_LABELS[certificate.status]}</b>",
         f"Дата покупки: {format_timestamp(certificate.created_at)}",
     ]
@@ -160,7 +161,8 @@ def issued_certificate_text(certificate: Certificate) -> str:
         "Поехали!",
         "Крышей? Или в Космос? Сам реши или подари другу.",
         "",
-        f"Это сообщение — сертификат номиналом {certificate.amount} 🍅.",
+        "Это сообщение — сертификат номиналом "
+        f"{format_amount(certificate.amount)}.",
         "",
         "ID сертификата:",
         f"<code>{certificate.public_id}</code>",
@@ -217,7 +219,8 @@ async def show_payment_step(message: Message, state: FSMContext) -> None:
     )
     await state.set_state(CertificateFlow.waiting_for_payment)
     await message.answer(
-        f"Сертификат номиналом <b>{amount} 🍅</b> готов к тестовой оплате."
+        "Сертификат номиналом "
+        f"<b>{format_amount(amount)}</b> готов к тестовой оплате."
         f"{comment_line}\n\n"
         "Сейчас деньги не списываются: кнопка сразу создаст сертификат.",
         parse_mode=ParseMode.HTML,
@@ -248,7 +251,8 @@ async def show_my_certificates(
             else f" — {STATUS_LABELS[certificate.status].lower()}"
         )
         rows.append(
-            f"<code>{certificate.public_id}</code> — {certificate.amount} 🍅{suffix}"
+            f"<code>{certificate.public_id}</code> — "
+            f"{format_amount(certificate.amount)}{suffix}"
         )
 
     await message.answer(
@@ -537,8 +541,11 @@ async def test_payment(
     data = await state.get_data()
     amount = data.get("amount")
     comment = data.get("comment")
-    expected_button = f"Оплатить {amount} 🍅"
-    if amount not in ALLOWED_AMOUNTS or message.text != expected_button:
+    if amount not in ALLOWED_AMOUNTS:
+        await show_amount_step(message, state)
+        return
+    expected_button = f"Оплатить {format_amount(amount)}"
+    if message.text != expected_button:
         await show_amount_step(message, state)
         return
 
@@ -611,7 +618,7 @@ async def admin_certificate_list(
         return
     rows = [f"<b>{STATUS_LABELS[status]} — последние 20</b>", ""]
     rows.extend(
-        f"<code>{item.public_id}</code> — {item.amount} 🍅"
+        f"<code>{item.public_id}</code> — {format_amount(item.amount)}"
         for item in certificates
     )
     rows.extend(["", "Чтобы открыть карточку, выберите поиск и введите ID."])
@@ -691,7 +698,7 @@ async def admin_redeem_prompt(
     await state.set_state(AdminFlow.confirming_redeem)
     await message.answer(
         f"Погасить сертификат <code>{certificate.public_id}</code> "
-        f"номиналом <b>{certificate.amount} 🍅</b>?\n\n"
+        f"номиналом <b>{format_amount(certificate.amount)}</b>?\n\n"
         "После подтверждения действие нельзя будет отменить через интерфейс бота.",
         parse_mode=ParseMode.HTML,
         reply_markup=ADMIN_REDEEM_CONFIRM_KEYBOARD,
@@ -789,7 +796,7 @@ async def invalid_payment_step(
         await show_amount_step(message, state)
         return
     await message.answer(
-        f"Нажмите «Оплатить {amount} 🍅» или вернитесь назад.",
+        f"Нажмите «Оплатить {format_amount(amount)}» или вернитесь назад.",
         reply_markup=payment_keyboard(amount),
     )
 
