@@ -161,8 +161,7 @@ def certificate_card_text(
 
 def issued_certificate_text(certificate: Certificate) -> str:
     lines = [
-        "Поехали!",
-        "Крышей? Или в Космос? Сам реши или подари другу.",
+        "Поехали? Крышей? Или в Космос? Сам реши или подари другу.",
         "",
         "Это сообщение — сертификат номиналом "
         f"{format_amount(certificate.amount)}.",
@@ -416,7 +415,7 @@ async def username_purchase_start(
     await state.clear()
     await state.set_state(UsernamePurchaseFlow.choosing_answer)
     await message.answer(
-        "Хотите приобрести юзернейм @kocmoc через платформу Fragments?",
+        "Хотите приобрести юзернейм @kocmoc через платформу Fragment?",
         reply_markup=USERNAME_PURCHASE_KEYBOARD,
     )
 
