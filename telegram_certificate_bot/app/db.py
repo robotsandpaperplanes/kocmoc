@@ -9,7 +9,15 @@ from uuid import uuid4
 import aiosqlite
 
 from .business import CERTIFICATE_AMOUNTS, generate_public_id
-from .models import Certificate, CertificateStatus, OrderStatus
+from .models import (
+    Certificate,
+    CertificateIssueResult,
+    CertificateStatus,
+    OrderStatus,
+)
+
+
+SQLITE_BUSY_TIMEOUT_MS = 10_000
 
 
 def utc_now() -> str:
@@ -25,8 +33,8 @@ class Database:
     async def init(self) -> None:
         self.path.parent.mkdir(parents=True, exist_ok=True)
         async with aiosqlite.connect(self.path) as db:
+            await self._configure_connection(db, foreign_keys=True)
             await db.execute("PRAGMA journal_mode=WAL")
-            await db.execute("PRAGMA foreign_keys=ON")
             await db.executescript(
                 """
                 CREATE TABLE IF NOT EXISTS orders (
@@ -65,6 +73,7 @@ class Database:
                 """
             )
             await self._migrate(db)
+            await self._assert_integrity(db)
             await db.executescript(
                 """
                 CREATE UNIQUE INDEX IF NOT EXISTS idx_certificates_public_id
@@ -78,6 +87,58 @@ class Database:
                 """
             )
             await db.commit()
+
+    async def create_backup(
+        self,
+        backup_dir: Path,
+        *,
+        keep_count: int,
+    ) -> Path:
+        """Create and verify an online SQLite backup, then prune old copies."""
+        if keep_count < 1:
+            raise ValueError("keep_count должен быть положительным")
+
+        backup_dir.mkdir(parents=True, exist_ok=True)
+        timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S%fZ")
+        destination = backup_dir / f"certificate-bot-{timestamp}.sqlite3"
+        if destination.resolve() == self.path.resolve():
+            raise ValueError("Путь резервной копии совпадает с основной базой")
+
+        try:
+            async with aiosqlite.connect(self.path) as source:
+                await self._configure_connection(source)
+                async with aiosqlite.connect(destination) as target:
+                    await self._configure_connection(target)
+                    await source.backup(target)
+                    cursor = await target.execute("PRAGMA integrity_check")
+                    result = await cursor.fetchone()
+                    if not result or result[0] != "ok":
+                        raise RuntimeError("Проверка резервной копии SQLite не пройдена")
+        except Exception:
+            destination.unlink(missing_ok=True)
+            raise
+
+        backups = sorted(backup_dir.glob("certificate-bot-*.sqlite3"))
+        for expired in backups[:-keep_count]:
+            expired.unlink(missing_ok=True)
+        return destination
+
+    @staticmethod
+    async def _configure_connection(
+        db: aiosqlite.Connection,
+        *,
+        foreign_keys: bool = False,
+    ) -> None:
+        await db.execute(f"PRAGMA busy_timeout={SQLITE_BUSY_TIMEOUT_MS}")
+        if foreign_keys:
+            await db.execute("PRAGMA foreign_keys=ON")
+
+    @staticmethod
+    async def _assert_integrity(db: aiosqlite.Connection) -> None:
+        cursor = await db.execute("PRAGMA quick_check")
+        result = await cursor.fetchone()
+        if not result or result[0] != "ok":
+            raise RuntimeError("Проверка целостности основной базы SQLite не пройдена")
 
     async def _migrate(self, db: aiosqlite.Connection) -> None:
         order_columns = await self._column_names(db, "orders")
@@ -205,7 +266,7 @@ class Database:
                 return candidate
         raise RuntimeError("Не удалось создать уникальный ID сертификата")
 
-    async def issue_test_certificate(
+    async def issue_paid_certificate(
         self,
         *,
         telegram_user_id: int,
@@ -213,68 +274,104 @@ class Database:
         chat_id: int,
         amount: int,
         comment: str | None,
+        invoice_payload: str,
+        telegram_payment_charge_id: str | None = None,
+        provider_payment_charge_id: str | None = None,
+        paid_at: str | None = None,
         public_id_generator: Callable[[], str] = generate_public_id,
-    ) -> Certificate:
-        """Create a paid test order and certificate in one transaction."""
+    ) -> CertificateIssueResult:
+        """Issue at most one certificate for the same confirmed payment."""
         if amount not in CERTIFICATE_AMOUNTS:
             raise ValueError("Недопустимый номинал сертификата")
+        invoice_payload = invoice_payload.strip()
+        if not invoice_payload:
+            raise ValueError("invoice_payload не должен быть пустым")
 
         order_id = str(uuid4())
         certificate_id = str(uuid4())
         created_at = utc_now()
         redeem_token = secrets.token_urlsafe(24)
-        payload = f"test:{order_id}"
 
         async with aiosqlite.connect(self.path) as db:
-            await db.execute("PRAGMA foreign_keys=ON")
-            await db.execute("BEGIN IMMEDIATE")
-            public_id = await self._unused_public_id(db, public_id_generator)
-            await db.execute(
-                """
-                INSERT INTO orders (
-                    id, telegram_user_id, chat_id, amount_kopecks, comment,
-                    status, invoice_payload, created_at, paid_at, buyer_username
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """,
-                (
-                    order_id,
-                    telegram_user_id,
-                    chat_id,
-                    amount * 100,
-                    comment,
-                    OrderStatus.PAID.value,
-                    payload,
-                    created_at,
-                    created_at,
-                    buyer_username,
-                ),
-            )
-            await db.execute(
-                """
-                INSERT INTO certificates (
-                    id, order_id, public_code, redeem_token, amount_kopecks,
-                    comment, status, created_at, public_id, amount,
-                    buyer_telegram_id, buyer_username
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """,
-                (
-                    certificate_id,
-                    order_id,
-                    public_id,
-                    redeem_token,
-                    amount * 100,
-                    comment,
-                    CertificateStatus.ACTIVE.value,
-                    created_at,
-                    public_id,
-                    amount,
-                    telegram_user_id,
-                    buyer_username,
-                ),
-            )
-            await db.commit()
+            db.row_factory = aiosqlite.Row
+            await self._configure_connection(db, foreign_keys=True)
+            try:
+                await db.execute("BEGIN IMMEDIATE")
+                existing = await self._find_certificate_for_payment(
+                    db,
+                    invoice_payload=invoice_payload,
+                    telegram_payment_charge_id=telegram_payment_charge_id,
+                    provider_payment_charge_id=provider_payment_charge_id,
+                )
+                if existing:
+                    if (
+                        existing["payment_invoice_payload"] != invoice_payload
+                        or existing["payment_telegram_user_id"] != telegram_user_id
+                        or existing["payment_amount_kopecks"] != amount * 100
+                    ):
+                        raise ValueError(
+                            "Платёжные идентификаторы уже связаны с другим заказом"
+                        )
+                    await db.commit()
+                    return CertificateIssueResult(
+                        certificate=self._certificate_from_row(existing),
+                        created=False,
+                    )
 
-        return Certificate(
+                public_id = await self._unused_public_id(db, public_id_generator)
+                await db.execute(
+                    """
+                    INSERT INTO orders (
+                        id, telegram_user_id, chat_id, amount_kopecks, comment,
+                        status, invoice_payload, telegram_payment_charge_id,
+                        provider_payment_charge_id, created_at, paid_at,
+                        buyer_username
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        order_id,
+                        telegram_user_id,
+                        chat_id,
+                        amount * 100,
+                        comment,
+                        OrderStatus.PAID.value,
+                        invoice_payload,
+                        telegram_payment_charge_id,
+                        provider_payment_charge_id,
+                        created_at,
+                        paid_at or created_at,
+                        buyer_username,
+                    ),
+                )
+                await db.execute(
+                    """
+                    INSERT INTO certificates (
+                        id, order_id, public_code, redeem_token, amount_kopecks,
+                        comment, status, created_at, public_id, amount,
+                        buyer_telegram_id, buyer_username
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        certificate_id,
+                        order_id,
+                        public_id,
+                        redeem_token,
+                        amount * 100,
+                        comment,
+                        CertificateStatus.ACTIVE.value,
+                        created_at,
+                        public_id,
+                        amount,
+                        telegram_user_id,
+                        buyer_username,
+                    ),
+                )
+                await db.commit()
+            except Exception:
+                await db.rollback()
+                raise
+
+        certificate = Certificate(
             id=certificate_id,
             order_id=order_id,
             public_id=public_id,
@@ -286,6 +383,67 @@ class Database:
             created_at=created_at,
             redeem_token=redeem_token,
         )
+        return CertificateIssueResult(certificate=certificate, created=True)
+
+    async def issue_test_certificate(
+        self,
+        *,
+        telegram_user_id: int,
+        buyer_username: str | None,
+        chat_id: int,
+        amount: int,
+        comment: str | None,
+        idempotency_key: str | None = None,
+        public_id_generator: Callable[[], str] = generate_public_id,
+    ) -> Certificate:
+        """Issue a test certificate with the same idempotency as real payment."""
+        result = await self.issue_paid_certificate(
+            telegram_user_id=telegram_user_id,
+            buyer_username=buyer_username,
+            chat_id=chat_id,
+            amount=amount,
+            comment=comment,
+            invoice_payload=f"test:{idempotency_key or uuid4()}",
+            public_id_generator=public_id_generator,
+        )
+        return result.certificate
+
+    @staticmethod
+    async def _find_certificate_for_payment(
+        db: aiosqlite.Connection,
+        *,
+        invoice_payload: str,
+        telegram_payment_charge_id: str | None,
+        provider_payment_charge_id: str | None,
+    ) -> aiosqlite.Row | None:
+        conditions = ["orders.invoice_payload = ?"]
+        params: list[object] = [invoice_payload]
+        if telegram_payment_charge_id:
+            conditions.append("orders.telegram_payment_charge_id = ?")
+            params.append(telegram_payment_charge_id)
+        if provider_payment_charge_id:
+            conditions.append("orders.provider_payment_charge_id = ?")
+            params.append(provider_payment_charge_id)
+
+        cursor = await db.execute(
+            f"""
+            SELECT
+                certificates.*,
+                orders.invoice_payload AS payment_invoice_payload,
+                orders.telegram_user_id AS payment_telegram_user_id,
+                orders.amount_kopecks AS payment_amount_kopecks
+            FROM orders
+            JOIN certificates ON certificates.order_id = orders.id
+            WHERE {" OR ".join(conditions)}
+            """,
+            tuple(params),
+        )
+        rows = await cursor.fetchall()
+        if len({row["id"] for row in rows}) > 1:
+            raise RuntimeError(
+                "Платёжные идентификаторы связаны с разными сертификатами"
+            )
+        return rows[0] if rows else None
 
     async def get_certificate_by_public_id(
         self,
@@ -374,6 +532,7 @@ class Database:
         redeemed_at = utc_now()
         async with aiosqlite.connect(self.path) as db:
             db.row_factory = aiosqlite.Row
+            await self._configure_connection(db, foreign_keys=True)
             await db.execute("BEGIN IMMEDIATE")
             update = await db.execute(
                 """
@@ -428,6 +587,7 @@ class Database:
     ) -> Certificate | None:
         async with aiosqlite.connect(self.path) as db:
             db.row_factory = aiosqlite.Row
+            await self._configure_connection(db)
             cursor = await db.execute(query, params)
             row = await cursor.fetchone()
         return self._certificate_from_row(row) if row else None
@@ -439,6 +599,7 @@ class Database:
     ) -> list[Certificate]:
         async with aiosqlite.connect(self.path) as db:
             db.row_factory = aiosqlite.Row
+            await self._configure_connection(db)
             cursor = await db.execute(query, params)
             rows = await cursor.fetchall()
         return [self._certificate_from_row(row) for row in rows]

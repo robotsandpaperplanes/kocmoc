@@ -1,5 +1,4 @@
-aiogram>=3.22,<4
-aiosqlite>=0.20,<1
-pydantic-settings>=2.7,<3
-qrcode[pil]>=8,<9
-pytest>=8,<9
+aiogram==3.22.0
+aiosqlite==0.22.1
+pydantic-settings==2.11.0
+qrcode[pil]==8.2

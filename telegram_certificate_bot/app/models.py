@@ -44,3 +44,9 @@ class Certificate:
     redeemed_by_telegram_id: int | None = None
     redeemed_by_username: str | None = None
     redeem_token: str | None = None
+
+
+@dataclass(frozen=True)
+class CertificateIssueResult:
+    certificate: Certificate
+    created: bool

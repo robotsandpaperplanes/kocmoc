@@ -8,6 +8,17 @@ class Settings(BaseSettings):
     bot_token: str = Field(alias="BOT_TOKEN")
     database_path: Path = Field(default=Path("./data/bot.sqlite3"), alias="DATABASE_PATH")
     admin_telegram_ids_raw: str = Field(default="", alias="ADMIN_TELEGRAM_IDS")
+    backup_dir: Path = Field(default=Path("./data/backups"), alias="BACKUP_DIR")
+    backup_interval_hours: float = Field(
+        default=24,
+        ge=0,
+        alias="BACKUP_INTERVAL_HOURS",
+    )
+    backup_keep_count: int = Field(default=14, ge=1, alias="BACKUP_KEEP_COUNT")
+    notify_admins_on_error: bool = Field(
+        default=True,
+        alias="NOTIFY_ADMINS_ON_ERROR",
+    )
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
