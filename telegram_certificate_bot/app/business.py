@@ -8,12 +8,18 @@ from datetime import datetime, timezone
 
 PUBLIC_ID_PATTERN = re.compile(r"^\d{4}-\d{4}$")
 MAX_DISPLAYED_COMMENT_LENGTH = 1000
+CERTIFICATE_AMOUNTS = (5_000, 10_000, 30_000, 50_000)
 SAILING_OUTCOMES = (
     ("Вы плывёте ✅", 96.0),
     ("Вы летите 🫵 🤣", 1.0),
     ("Вы испугались воды 😰", 2.5),
     ("На вас упал огнетушитель 🧯", 0.5),
 )
+
+
+def format_amount(amount: int) -> str:
+    """Format a ruble amount with a non-breaking thousands separator."""
+    return f"{amount:,}".replace(",", "\u202f") + " ₽"
 
 
 def generate_public_id() -> str:
