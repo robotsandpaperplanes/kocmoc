@@ -17,13 +17,13 @@ def test_create_certificate_and_prevent_repeated_redemption() -> None:
                 telegram_user_id=101,
                 buyer_username="buyer",
                 chat_id=202,
-                amount=10,
+                amount=10_000,
                 comment="Для друга",
                 public_id_generator=lambda: "1234-5678",
             )
 
             assert certificate.public_id == "1234-5678"
-            assert certificate.amount == 10
+            assert certificate.amount == 10_000
             assert certificate.buyer_telegram_id == 101
             assert certificate.buyer_username == "buyer"
             assert certificate.status == CertificateStatus.ACTIVE
@@ -66,7 +66,7 @@ def test_public_id_collision_is_retried() -> None:
                 telegram_user_id=1,
                 buyer_username=None,
                 chat_id=1,
-                amount=5,
+                amount=5_000,
                 comment=None,
                 public_id_generator=lambda: "0000-0001",
             )
@@ -76,7 +76,7 @@ def test_public_id_collision_is_retried() -> None:
                 telegram_user_id=1,
                 buyer_username=None,
                 chat_id=1,
-                amount=15,
+                amount=30_000,
                 comment=None,
                 public_id_generator=lambda: next(values),
             )
@@ -136,7 +136,7 @@ def test_archived_v2_database_is_migrated_without_losing_certificate() -> None:
 
             assert migrated is not None
             assert normalize_public_id(migrated.public_id) == migrated.public_id
-            assert migrated.amount == 5
+            assert migrated.amount == 5_000
             assert migrated.buyer_telegram_id == 777
             assert migrated.comment == "Старый комментарий"
 
