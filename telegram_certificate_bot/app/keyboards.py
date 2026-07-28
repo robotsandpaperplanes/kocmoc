@@ -7,6 +7,8 @@ from aiogram.types import (
     ReplyKeyboardMarkup,
 )
 
+from .business import CERTIFICATE_AMOUNTS, format_amount
+
 
 BTN_TIME = "🕰️ Который час?"
 BTN_SAIL = "⚓️ Плыть"
@@ -29,10 +31,8 @@ BTN_CANCEL = "❌ Отмена"
 INLINE_SAIL_QUERY = "плыть"
 
 AMOUNT_LABELS = {
-    "5 🍅": 5,
-    "10 🍅": 10,
-    "15 🍅": 15,
-    "20 🍅": 20,
+    format_amount(amount): amount
+    for amount in CERTIFICATE_AMOUNTS
 }
 
 
@@ -60,8 +60,8 @@ BACK_KEYBOARD = _keyboard([[BTN_BACK]])
 
 AMOUNT_KEYBOARD = _keyboard(
     [
-        ["5 🍅", "10 🍅"],
-        ["15 🍅", "20 🍅"],
+        [format_amount(5_000), format_amount(10_000)],
+        [format_amount(30_000), format_amount(50_000)],
         [BTN_BACK],
     ],
     "Выберите номинал",
@@ -75,7 +75,7 @@ COMMENT_KEYBOARD = _keyboard(
 
 def payment_keyboard(amount: int) -> ReplyKeyboardMarkup:
     return _keyboard(
-        [[f"Оплатить {amount} 🍅"], [BTN_BACK]],
+        [[f"Оплатить {format_amount(amount)}"], [BTN_BACK]],
         "Подтвердите тестовую оплату",
     )
 
@@ -124,7 +124,7 @@ def certificate_list_inline(
         inline_keyboard=[
             [
                 InlineKeyboardButton(
-                    text=f"{public_id} — {amount} 🍅",
+                    text=f"{public_id} — {format_amount(amount)}",
                     callback_data=f"certificate:{public_id}",
                 )
             ]
