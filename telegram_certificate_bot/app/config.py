@@ -1,3 +1,4 @@
+import re
 from pathlib import Path
 
 from pydantic import Field, field_validator
@@ -33,14 +34,16 @@ class Settings(BaseSettings):
     @property
     def admin_telegram_ids(self) -> set[int]:
         result: set[int] = set()
-        for item in self.admin_telegram_ids_raw.split(","):
-            item = item.strip()
+        for item in re.split(r"[\s,;]+", self.admin_telegram_ids_raw.strip()):
             if not item:
                 continue
             try:
                 result.add(int(item))
             except ValueError as exc:
-                raise ValueError("ADMIN_TELEGRAM_IDS должен содержать Telegram ID через запятую") from exc
+                raise ValueError(
+                    "ADMIN_TELEGRAM_IDS должен содержать Telegram ID "
+                    "через пробел, запятую или точку с запятой"
+                ) from exc
         return result
 
     def is_admin(self, telegram_user_id: int) -> bool:
