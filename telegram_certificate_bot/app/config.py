@@ -34,7 +34,7 @@ class Settings(BaseSettings):
     @property
     def admin_telegram_ids(self) -> set[int]:
         result: set[int] = set()
-        for item in re.split(r"[\s,;]+", self.admin_telegram_ids_raw.strip()):
+        for item in re.split(r"[\s,;&]+", self.admin_telegram_ids_raw.strip()):
             if not item:
                 continue
             try:
@@ -42,7 +42,7 @@ class Settings(BaseSettings):
             except ValueError as exc:
                 raise ValueError(
                     "ADMIN_TELEGRAM_IDS должен содержать Telegram ID "
-                    "через пробел, запятую или точку с запятой"
+                    "через пробел, запятую, точку с запятой или &"
                 ) from exc
         return result
 
