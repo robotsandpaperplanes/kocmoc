@@ -46,4 +46,4 @@ def test_sailing_probabilities_add_up_to_one_hundred_percent() -> None:
 
 def test_utc_time_text_is_24_hour_utc() -> None:
     moment = datetime(2026, 7, 27, 23, 5, tzinfo=timezone.utc)
-    assert utc_time_text(moment) == "Сей час 23:05\nUTC+0"
+    assert utc_time_text(moment) == "Сей час самое время попить водички💧"
