@@ -47,4 +47,4 @@ def sailing_result() -> str:
 
 def utc_time_text(now: datetime | None = None) -> str:
     current = now.astimezone(timezone.utc) if now else datetime.now(timezone.utc)
-    return f"Сей час {current:%H:%M}\nUTC+0"
+    return f"Сей час самое время попить водички💧"

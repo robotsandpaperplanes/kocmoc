@@ -85,6 +85,80 @@ def test_public_id_collision_is_retried() -> None:
     asyncio.run(run())
 
 
+def test_same_payment_issues_only_one_certificate() -> None:
+    async def run() -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "test.sqlite3"
+            db = Database(path)
+            await db.init()
+
+            async def issue():
+                return await db.issue_paid_certificate(
+                    telegram_user_id=101,
+                    buyer_username="buyer",
+                    chat_id=202,
+                    amount=10_000,
+                    comment="Один платёж",
+                    invoice_payload="order:stable-payload",
+                    telegram_payment_charge_id="telegram-charge-1",
+                    provider_payment_charge_id="provider-charge-1",
+                    public_id_generator=lambda: "1111-2222",
+                )
+
+            first, second = await asyncio.gather(issue(), issue())
+
+            assert first.certificate.id == second.certificate.id
+            assert first.certificate.public_id == "1111-2222"
+            assert {first.created, second.created} == {False, True}
+
+            with sqlite3.connect(path) as connection:
+                order_count = connection.execute(
+                    "SELECT COUNT(*) FROM orders"
+                ).fetchone()[0]
+                certificate_count = connection.execute(
+                    "SELECT COUNT(*) FROM certificates"
+                ).fetchone()[0]
+            assert order_count == 1
+            assert certificate_count == 1
+
+    asyncio.run(run())
+
+
+def test_online_backup_is_valid_and_old_copies_are_pruned() -> None:
+    async def run() -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            db = Database(root / "test.sqlite3")
+            await db.init()
+            await db.issue_test_certificate(
+                telegram_user_id=1,
+                buyer_username=None,
+                chat_id=1,
+                amount=5_000,
+                comment=None,
+                public_id_generator=lambda: "2222-3333",
+            )
+
+            backup_dir = root / "backups"
+            created = [
+                await db.create_backup(backup_dir, keep_count=2)
+                for _ in range(3)
+            ]
+
+            backups = sorted(backup_dir.glob("certificate-bot-*.sqlite3"))
+            assert len(backups) == 2
+            assert created[-1] in backups
+            with sqlite3.connect(created[-1]) as backup:
+                assert backup.execute(
+                    "PRAGMA integrity_check"
+                ).fetchone() == ("ok",)
+                assert backup.execute(
+                    "SELECT COUNT(*) FROM certificates"
+                ).fetchone() == (1,)
+
+    asyncio.run(run())
+
+
 def test_archived_v2_database_is_migrated_without_losing_certificate() -> None:
     async def run() -> None:
         with tempfile.TemporaryDirectory() as directory:

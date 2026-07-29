@@ -3,8 +3,9 @@ from __future__ import annotations
 import logging
 from datetime import datetime
 from html import escape
+from uuid import uuid4
 
-from aiogram import Dispatcher, F, Router
+from aiogram import Bot, Dispatcher, F, Router
 from aiogram.enums import ParseMode
 from aiogram.filters import Command, CommandObject, CommandStart
 from aiogram.fsm.context import FSMContext
@@ -13,6 +14,7 @@ from aiogram.types import (
     InlineQuery,
     InlineQueryResultArticle,
     InputTextMessageContent,
+    ErrorEvent,
     Message,
 )
 
@@ -63,6 +65,7 @@ from .keyboards import (
     sailing_inline_keyboard,
 )
 from .models import Certificate, CertificateStatus
+from .monitoring import notify_admins
 from .states import AdminFlow, CertificateFlow, UsernamePurchaseFlow
 
 
@@ -158,8 +161,7 @@ def certificate_card_text(
 
 def issued_certificate_text(certificate: Certificate) -> str:
     lines = [
-        "Поехали!",
-        "Крышей? Или в Космос? Сам реши или подари другу.",
+        "Поехали? Крышей? Или в Космос? Сам реши или подари другу.",
         "",
         "Это сообщение — сертификат номиналом "
         f"{format_amount(certificate.amount)}.",
@@ -413,7 +415,7 @@ async def username_purchase_start(
     await state.clear()
     await state.set_state(UsernamePurchaseFlow.choosing_answer)
     await message.answer(
-        "Хотите приобрести юзернейм @kocmoc через платформу Fragments?",
+        "Хотите приобрести юзернейм @kocmoc через платформу Fragment?",
         reply_markup=USERNAME_PURCHASE_KEYBOARD,
     )
 
@@ -485,7 +487,11 @@ async def certificate_callback(
 @router.message(CertificateFlow.choosing_amount, F.text.in_(set(AMOUNT_LABELS)))
 async def choose_amount(message: Message, state: FSMContext) -> None:
     amount = AMOUNT_LABELS[message.text]
-    await state.update_data(amount=amount, comment=None)
+    await state.update_data(
+        amount=amount,
+        comment=None,
+        purchase_session_id=str(uuid4()),
+    )
     await state.set_state(CertificateFlow.waiting_for_comment)
     await message.answer(
         "Вы можете оставить комментарий для студии или для получателя сертификата.",
@@ -541,7 +547,11 @@ async def test_payment(
     data = await state.get_data()
     amount = data.get("amount")
     comment = data.get("comment")
+    purchase_session_id = data.get("purchase_session_id")
     if amount not in ALLOWED_AMOUNTS:
+        await show_amount_step(message, state)
+        return
+    if not purchase_session_id:
         await show_amount_step(message, state)
         return
     expected_button = f"Оплатить {format_amount(amount)}"
@@ -558,6 +568,7 @@ async def test_payment(
             chat_id=message.chat.id,
             amount=amount,
             comment=comment,
+            idempotency_key=purchase_session_id,
         )
     except Exception:
         logger.exception("Could not issue test certificate")
@@ -815,3 +826,24 @@ async def invalid_redeem_confirmation(message: Message) -> None:
         "Подтвердите или отмените погашение кнопкой ниже.",
         reply_markup=ADMIN_REDEEM_CONFIRM_KEYBOARD,
     )
+
+
+@router.error()
+async def unhandled_error(
+    event: ErrorEvent,
+    bot: Bot,
+    settings: Settings,
+) -> bool:
+    exception = event.exception
+    logger.error(
+        "Unhandled error while processing %s",
+        type(event.update).__name__,
+        exc_info=(type(exception), exception, exception.__traceback__),
+    )
+    await notify_admins(
+        bot,
+        settings,
+        context=f"обработка {type(event.update).__name__}",
+        exception=exception,
+    )
+    return True
